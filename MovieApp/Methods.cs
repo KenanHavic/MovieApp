@@ -31,7 +31,6 @@ namespace ConsoleApp1
                     command.ExecuteNonQuery();
                 }
 
-                // Ako je unos uspješan, postavi success na true
                 success = true;
             }
             catch (Exception ex)
@@ -90,9 +89,8 @@ namespace ConsoleApp1
             Console.WriteLine("[3] SEARCH MOVIE");
             Console.WriteLine("[4] RATE MOVIE");
             Console.WriteLine("[5] TOP RATED MOVIES");
-            Console.WriteLine("[6] RECOMMENDATIONS");
-            Console.WriteLine("[7] LOGOUT");
-            Console.WriteLine("[8] QUIT");
+            Console.WriteLine("[6] LOGOUT");
+            Console.WriteLine("[7] QUIT");
 
             string enteredUserSelection = Console.ReadLine();
             switch (enteredUserSelection)
@@ -121,20 +119,33 @@ namespace ConsoleApp1
                     break;
                 case "4":
                     Console.WriteLine("RATE MOVIE");
+                    Console.WriteLine("Write the name of the movie you want to rate: ");
+                    string movieNameToRate = Console.ReadLine();
+
+                    Console.WriteLine("Enter your username: ");
+                    string username = Console.ReadLine();
+
+                    Console.WriteLine("Rate the movie (1-10): ");
+                    if (double.TryParse(Console.ReadLine(), out double rating) && rating >= 1 && rating <= 10)
+                    {
+                        RateMovie(movieNameToRate, username, rating);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid rating. Please enter a number between 1 and 10.");
+                    }
                     break;
                 case "5":
                     Console.WriteLine("TOP RATED MOVIES");
+                    GetTopRatedMovies();
                     break;
                 case "6":
-                    Console.WriteLine("RECOMMENDATIONS");
-                    break;
-                case "7":
                     Console.WriteLine("LOGOUT");
                     break;
-                case "8":
+                case "7":
                     Environment.Exit(0);
                     break;
-                default:
+                 default:
                     Console.WriteLine("Wrong choice");
                     MovieMenu();
                     break;
@@ -292,5 +303,121 @@ namespace ConsoleApp1
                 connection.Close();
             }
         }
+        public static void RateMovie(string movieName, string username, double userRating)
+        {
+            string connectionToDatabase = "Server=127.0.0.1;Port=3306;Database=MovieApp;Uid=root;Pwd=admin;";
+            MySqlConnection connection = new MySqlConnection(connectionToDatabase);
+
+            try
+            {
+                connection.Open();
+
+                string findUserIDQuery = "SELECT UserID FROM Registration WHERE Username = @username";
+
+                int userID = 0;
+
+                using (MySqlCommand findUserIDCommand = new MySqlCommand(findUserIDQuery, connection))
+                {
+                    findUserIDCommand.Parameters.AddWithValue("@username", username);
+                    userID = Convert.ToInt32(findUserIDCommand.ExecuteScalar());
+                }
+
+                if (userID > 0)
+                {
+                    string findMovieIDQuery = "SELECT MoviesID FROM Movies WHERE NameOfMovie = @movieName";
+
+                    int movieID = 0;
+
+                    using (MySqlCommand findMovieIDCommand = new MySqlCommand(findMovieIDQuery, connection))
+                    {
+                        findMovieIDCommand.Parameters.AddWithValue("@movieName", movieName);
+                        movieID = Convert.ToInt32(findMovieIDCommand.ExecuteScalar());
+                    }
+
+                    if (movieID > 0)
+                    {
+                        string insertRatingQuery = "INSERT INTO MovieRatings (MovieID, UserID, Rating) VALUES (@movieID, @userID, @userRating)";
+
+                        using (MySqlCommand insertRatingCommand = new MySqlCommand(insertRatingQuery, connection))
+                        {
+                            insertRatingCommand.Parameters.AddWithValue("@movieID", movieID);
+                            insertRatingCommand.Parameters.AddWithValue("@userID", userID);
+                            insertRatingCommand.Parameters.AddWithValue("@userRating", userRating);
+
+                            int rowsAffected = insertRatingCommand.ExecuteNonQuery();
+
+                            if (rowsAffected > 0)
+                            {
+                                Console.WriteLine("You have rated the movie.");
+                            }
+                            else
+                            {
+                                Console.WriteLine("Movie rating failed.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Movie not found.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("User not found.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+        public static void GetTopRatedMovies()
+        {
+            string connectionToDatabase = "Server=127.0.0.1;Port=3306;Database=MovieApp;Uid=root;Pwd=admin;";
+            MySqlConnection connection = new MySqlConnection(connectionToDatabase);
+
+            try
+            {
+                connection.Open();
+
+                string query = "SELECT M.NameOfMovie, AVG(MR.Rating) AS AvgRating " +
+                               "FROM Movies AS M " +
+                               "JOIN MovieRatings AS MR ON M.MoviesID = MR.MovieID " +
+                               "GROUP BY M.NameOfMovie " +
+                               "ORDER BY AvgRating DESC LIMIT 10";
+
+                using (MySqlCommand command = new MySqlCommand(query, connection))
+                {
+                    using (MySqlDataReader reader = command.ExecuteReader())
+                    {
+                        Console.WriteLine("Top Rated Movies:");
+                        while (reader.Read())
+                        {
+                            string movieName = reader.GetString("NameOfMovie");
+                            double avgRating = reader.GetDouble("AvgRating");
+
+                            Console.WriteLine($"Movie: {movieName}, Average Rating: {avgRating:F2}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: " + ex.Message);
+            }
+            finally
+            {
+                connection.Close();
+            }
+        }
+
+
+
+
+
     }
 }
